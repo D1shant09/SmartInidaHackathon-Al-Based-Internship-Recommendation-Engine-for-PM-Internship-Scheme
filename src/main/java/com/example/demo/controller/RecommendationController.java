@@ -48,8 +48,38 @@ public class RecommendationController {
         return ResponseEntity.ok("Cache cleared successfully");
     }
     
+    @PostMapping("/algorithm/score")
+    public ResponseEntity<Map<String, Object>> getDetailedScoring(
+            @RequestBody Map<String, Object> request) {
+        // Extract student profile and internship from request
+        StudentProfile student = extractStudentProfile(request);
+        // For simplicity, we'll get the first internship - in real scenario, you'd pass internship ID
+        List<Internship> internships = recommendationService.getAllInternships();
+        if (!internships.isEmpty()) {
+            Map<String, Object> scoring = recommendationService.getDetailedScoring(student, internships.get(0));
+            return ResponseEntity.ok(scoring);
+        }
+        return ResponseEntity.badRequest().body(Map.of("error", "No internships available"));
+    }
+    
+    private StudentProfile extractStudentProfile(Map<String, Object> request) {
+        StudentProfile profile = new StudentProfile();
+        profile.setName((String) request.get("name"));
+        profile.setLocation((String) request.get("location"));
+        profile.setInterestSector((String) request.get("interestSector"));
+        profile.setCategoryRural((Integer) request.getOrDefault("categoryRural", 0));
+        profile.setCategoryTribal((Integer) request.getOrDefault("categoryTribal", 0));
+        profile.setPastParticipation((Integer) request.getOrDefault("pastParticipation", 0));
+        
+        @SuppressWarnings("unchecked")
+        List<String> skills = (List<String>) request.getOrDefault("skills", java.util.Collections.emptyList());
+        profile.setSkills(skills);
+        
+        return profile;
+    }
+    
     @GetMapping("/health")
     public String healthCheck() {
-        return "Internship Recommendation API is running with MySQL and Redis!";
+        return "Internship Recommendation API is running with MySQL, Redis, and ML Fairness Algorithm!";
     }
 }

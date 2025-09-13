@@ -1,5 +1,6 @@
 package com.example.demo.service;
 
+import com.example.demo.algorithm.InternshipRecommendationAlgorithm;
 import com.example.demo.model.Internship;
 import com.example.demo.model.Recommendation;
 import com.example.demo.model.StudentProfile;
@@ -27,6 +28,9 @@ public class RecommendationService {
     
     @Autowired
     private RecommendationRepository recommendationRepository;
+    
+    @Autowired
+    private InternshipRecommendationAlgorithm recommendationAlgorithm;
 
     // Mock internship database - will be replaced with repository calls
     private List<Internship> internshipDatabase = Arrays.asList(
@@ -49,28 +53,23 @@ public class RecommendationService {
     
     @Cacheable(value = "recommendations", key = "#profile.name + '_' + #profile.location + '_' + #profile.interestSector")
     public Recommendation generateRecommendations(StudentProfile profile) {
-        List<Internship> recommendedInternships = new ArrayList<>();
-        
         // Get all active internships from database, fallback to mock data if no data exists
         List<Internship> availableInternships = internshipRepository.findByIsActiveTrue();
         if (availableInternships.isEmpty()) {
             availableInternships = internshipDatabase;
         }
         
-        for (Internship internship : availableInternships) {
-            double score = calculateMatchScore(profile, internship);
-            if (score > 0.3) { // Threshold for recommendation
-                internship.setMatchScore(score);
-                recommendedInternships.add(internship);
-            }
-        }
+        // Use the ML fairness algorithm from Algo.py
+        List<Internship> recommendedInternships = recommendationAlgorithm
+            .generateRecommendations(profile, availableInternships);
         
-        // Sort by match score (highest first)
-        recommendedInternships.sort((i1, i2) -> Double.compare(i2.getMatchScore(), i1.getMatchScore()));
+        // Filter by threshold (only internships with score > 0.3)
+        List<Internship> filteredRecommendations = recommendedInternships.stream()
+            .filter(internship -> internship.getMatchScore() > 0.3)
+            .collect(Collectors.toList());
         
-        String message = generateRecommendationMessage(profile, recommendedInternships.size());
-        
-        Recommendation recommendation = new Recommendation(recommendedInternships, message);
+        String message = generateRecommendationMessage(profile, filteredRecommendations.size());
+        Recommendation recommendation = new Recommendation(filteredRecommendations, message);
         
         // Save the recommendation if the student exists in the database
         if (profile.getId() != null) {
@@ -79,49 +78,6 @@ public class RecommendationService {
         }
         
         return recommendation;
-    }
-    
-    private double calculateMatchScore(StudentProfile profile, Internship internship) {
-        double score = 0.0;
-        
-        // Skill matching
-        if (profile.getSkills() != null) {
-            for (String skill : profile.getSkills()) {
-                if (internship.getDescription().toLowerCase().contains(skill.toLowerCase())) {
-                    score += 0.4;
-                }
-            }
-        }
-        
-        // Sector matching
-        if (profile.getInterestSector() != null && 
-            internship.getSector().equalsIgnoreCase(profile.getInterestSector())) {
-            score += 0.3;
-        }
-        
-        // Location preference
-        if (profile.getLocation() != null) {
-            if (profile.getLocation().equalsIgnoreCase("rural") && 
-                internship.getLocation().toLowerCase().contains("rural")) {
-                score += 0.2;
-            } else if (!profile.getLocation().equalsIgnoreCase("rural") && 
-                       !internship.getLocation().toLowerCase().contains("rural")) {
-                score += 0.1;
-            }
-        }
-        
-        // Rural category bonus
-        if (profile.getCategoryRural() == 1 && 
-            internship.getLocation().toLowerCase().contains("rural")) {
-            score += 0.2;
-        }
-        
-        // Past participation bonus
-        if (profile.getPastParticipation() > 0) {
-            score += 0.1;
-        }
-        
-        return Math.min(score, 1.0); // Cap at 1.0
     }
     
     private String generateRecommendationMessage(StudentProfile profile, int count) {
@@ -163,6 +119,10 @@ public class RecommendationService {
     
     public List<Recommendation> getRecommendationHistory(StudentProfile student) {
         return recommendationRepository.findByStudentOrderByCreatedAtDesc(student);
+    }
+    
+    public java.util.Map<String, Object> getDetailedScoring(StudentProfile student, Internship internship) {
+        return recommendationAlgorithm.getDetailedScoring(student, internship);
     }
     
     @CacheEvict(value = {"recommendations", "internships"}, allEntries = true)
