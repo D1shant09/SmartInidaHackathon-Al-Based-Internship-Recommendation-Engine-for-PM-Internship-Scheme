@@ -1,0 +1,31 @@
+# Maven build directory
+target/
+
+# IDE files
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# VS Code (optional - you might want to keep .vscode/settings.json)
+# .vscode/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Package files
+*.jar
+*.war
+*.ear
+
+# Temporary files
+*.tmp
+*.swp
+*.bak
+
+# Maven wrapper jar (optional - some prefer to include it)
+# .mvn/wrapper/maven-wrapper.jar
